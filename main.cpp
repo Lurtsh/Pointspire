@@ -5,6 +5,7 @@
 
 #include "Application.hpp"
 
+
 int main() {
     try {
         Application app;

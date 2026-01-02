@@ -37,6 +37,20 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(tga)
 
+FetchContent_Declare(
+        happly
+        GIT_REPOSITORY https://github.com/nmwsharp/happly.git
+        GIT_TAG master
+        UPDATE_DISCONNECTED 1
+)
+
+FetchContent_MakeAvailable(happly)
+
+if (NOT TARGET happly)
+    add_library(happly INTERFACE)
+    target_include_directories(happly INTERFACE ${happly_SOURCE_DIR})
+endif ()
+
 if(CMAKE_COMPILER_IS_GNUCXX)
     message(STATUS "GCC detected, adding compile flags")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
@@ -46,9 +60,13 @@ endif(CMAKE_COMPILER_IS_GNUCXX)
 
 include_directories(include)
 
-set(HEADERS Application.hpp)
+set(HEADERS Application.hpp
+            BunnyLoader.hpp
+)
 
-set(SOURCES Application.cpp)
+set(SOURCES Application.cpp
+            BunnyLoader.cpp
+)
 
 list(TRANSFORM HEADERS PREPEND "include/")
 list(TRANSFORM SOURCES PREPEND "src/")
@@ -60,4 +78,6 @@ target_include_directories(Pointspire PRIVATE include)
 add_subdirectory(shaders)
 add_dependencies(Pointspire shaders)
 
-target_link_libraries(Pointspire PRIVATE tga_vulkan tga_utils ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(Pointspire PRIVATE tga_vulkan tga_utils happly ${CMAKE_THREAD_LIBS_INIT})
+
+file(COPY assets/ DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/assets/)

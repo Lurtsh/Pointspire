@@ -1,6 +1,15 @@
 #include "Application.hpp"
+#include "BunnyLoader.hpp"
+
 
 void Application::run() {
+
+    std::vector<PositionVertex> bunnyVertices = loadBunny("assets/bunny/bun.conf", "assets/bunny/data/");
+
+    if (bunnyVertices.empty()) {
+        std::cerr << "Failed to load bunny model.\n";
+    }
+
     while (!tgai.windowShouldClose(window)) {
         tgai.pollEvents(window);
 
