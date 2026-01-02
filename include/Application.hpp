@@ -8,6 +8,9 @@
 
 #include "tga/tga_utils.hpp"
 
+#include "PointCloud.hpp"
+#include "Camera.hpp"
+
 struct Application {
     tga::Interface tgai;
     tga::Window window;
@@ -17,6 +20,8 @@ struct Application {
     tga::InputSet inputSet;
     tga::RenderPass renderPass;
     tga::CommandBuffer commandBuffer;
+
+    std::unique_ptr<PointCloud> bunnyModel;
 
     struct CameraData {
         alignas(16) glm::mat4 model;
@@ -33,10 +38,22 @@ struct Application {
         window = tgai.createWindow(winInfo);
         tgai.setWindowTitle(window, "Pointspire");
 
-        vertShader = tga::loadShader("shaders/cube_vert.spv", tga::ShaderType::vertex, tgai);
-        fragShader = tga::loadShader("shaders/cube_frag.spv", tga::ShaderType::fragment, tgai);
+        // Load the bunny model
+        std::vector<PositionVertex> bunnyVertices = loadBunny("assets/bunny/bun.conf", "assets/bunny/data/");
 
-        glm::vec3 eye = {2.5f, 2.5f, 2.5f};
+        if (bunnyVertices.empty()) {
+            std::cerr << "Failed to load bunny model.\n";
+        }
+
+        bunnyModel = std::make_unique<PointCloud>(tgai, bunnyVertices);
+
+        // Load shaders
+        vertShader = tga::loadShader("shaders/bunny_primitive_vert.spv", tga::ShaderType::vertex, tgai);
+        fragShader = tga::loadShader("shaders/bunny_primitive_frag.spv", tga::ShaderType::fragment, tgai);
+        // vertShader = tga::loadShader("shaders/cube_vert.spv", tga::ShaderType::vertex, tgai);
+        // fragShader = tga::loadShader("shaders/cube_frag.spv", tga::ShaderType::fragment, tgai);
+
+        glm::vec3 eye = {0.6f, 0.6f, 0.6f};
         glm::vec3 center = {0.5f, 0.5f, 0.5f};
         glm::vec3 up = {0.0f, 1.0f, 0.0f};
 
@@ -54,13 +71,10 @@ struct Application {
         uniformBuffer = tgai.createBuffer(uboInfo);
 
         tga::InputLayout inputLayout{
-            { tga::BindingLayout{tga::BindingType::uniformBuffer} }
-        };
-
-        tga::InputSetInfo inputSetInfo{
-            tga::RenderPass{},
-            { tga::Binding{uniformBuffer, 0, 0} },
-            0
+            {
+                tga::BindingLayout{tga::BindingType::uniformBuffer},
+                tga::BindingLayout{tga::BindingType::storageBuffer},
+            }
         };
 
         tga::RenderPassInfo passInfo{
@@ -70,12 +84,20 @@ struct Application {
             {},
             inputLayout,
             tga::ClearOperation::all,
-            tga::PerPixelOperations{tga::CompareOperation::less, false},
-            tga::RasterizerConfig{tga::FrontFace::counterclockwise, tga::CullMode::back}
+            tga::PerPixelOperations{tga::CompareOperation::less, true},
+            tga::RasterizerConfig{tga::FrontFace::counterclockwise, tga::CullMode::none}
         };
         renderPass = tgai.createRenderPass(passInfo);
 
-        inputSetInfo.targetPass = renderPass;
+        tga::InputSetInfo inputSetInfo{
+            renderPass,
+            { tga::Binding{uniformBuffer, 0, 0},
+                        tga::Binding{bunnyModel->getBuffer(), 1, 0}
+                        },
+            0
+        };
+
+        // inputSetInfo.targetPass = renderPass;
         inputSet = tgai.createInputSet(inputSetInfo);
 
         commandBuffer = tga::CommandBuffer{};

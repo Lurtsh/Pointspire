@@ -62,10 +62,14 @@ include_directories(include)
 
 set(HEADERS Application.hpp
             BunnyLoader.hpp
+            PointCloud.hpp
+            Camera.hpp
 )
 
 set(SOURCES Application.cpp
             BunnyLoader.cpp
+            PointCloud.cpp
+            Camera.cpp
 )
 
 list(TRANSFORM HEADERS PREPEND "include/")
