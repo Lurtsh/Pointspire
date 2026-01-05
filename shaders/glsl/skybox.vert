@@ -25,5 +25,8 @@ const int skyboxFaces[36] = int[36](
 void main() {
     vec3 pos = skyboxVertices[skyboxFaces[gl_VertexIndex]];
     texCoords = pos;
-    gl_Position = ubo.proj * ubo.view * ubo.model * vec4(pos, 1.0);
+
+    mat4 viewNoTranslation = mat4(mat3(ubo.view));
+//    gl_Position = ubo.proj * ubo.view * ubo.model * vec4(pos, 1.0);
+    gl_Position = ubo.proj * viewNoTranslation * vec4(pos, 1.0);
 }

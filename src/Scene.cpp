@@ -75,7 +75,7 @@ void Scene::loadSkyCubemap(std::vector<std::string> filepaths) {
         faceWidth,
         faceHeight,
         tga::Format::r8g8b8a8_srgb,
-        tga::SamplerMode::linear,
+        tga::SamplerMode::nearest,
         tga::AddressMode::clampEdge,
         tga::TextureType::_Cube,
         6,

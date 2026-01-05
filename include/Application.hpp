@@ -27,6 +27,8 @@ struct Application {
 
     std::unique_ptr<Scene> scene;
 
+    Camera camera;
+
     struct CameraData {
         alignas(16) glm::mat4 model;
         alignas(16) glm::mat4 view;
