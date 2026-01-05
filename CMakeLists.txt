@@ -64,12 +64,14 @@ set(HEADERS Application.hpp
             BunnyLoader.hpp
             PointCloud.hpp
             Camera.hpp
+            Scene.hpp
 )
 
 set(SOURCES Application.cpp
             BunnyLoader.cpp
             PointCloud.cpp
             Camera.cpp
+            Scene.cpp
 )
 
 list(TRANSFORM HEADERS PREPEND "include/")

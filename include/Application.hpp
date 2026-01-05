@@ -1,3 +1,4 @@
+#pragma once
 #ifndef POINTSPIRE_APPLICATION_HPP
 #define POINTSPIRE_APPLICATION_HPP
 
@@ -10,6 +11,7 @@
 
 #include "PointCloud.hpp"
 #include "Camera.hpp"
+#include "Scene.hpp"
 
 struct Application {
     tga::Interface tgai;
@@ -21,7 +23,9 @@ struct Application {
     tga::RenderPass renderPass;
     tga::CommandBuffer commandBuffer;
 
-    std::unique_ptr<PointCloud> bunnyModel;
+    //std::unique_ptr<PointCloud> bunnyModel;
+
+    std::unique_ptr<Scene> scene;
 
     struct CameraData {
         alignas(16) glm::mat4 model;
@@ -34,24 +38,28 @@ struct Application {
         auto winW = scrW / 2;
         auto winH = scrH / 2;
 
+        scene = std::make_unique<Scene>(tgai);
+
         tga::WindowInfo winInfo{winW, winH, tga::PresentMode::vsync};
         window = tgai.createWindow(winInfo);
         tgai.setWindowTitle(window, "Pointspire");
 
         // Load the bunny model
-        std::vector<PositionVertex> bunnyVertices = loadBunny("assets/bunny/bun.conf", "assets/bunny/data/");
+        //std::vector<PositionVertex> bunnyVertices = loadBunny("assets/bunny/bun.conf", "assets/bunny/data/");
 
-        if (bunnyVertices.empty()) {
-            std::cerr << "Failed to load bunny model.\n";
-        }
+        //if (bunnyVertices.empty()) {
+        //    std::cerr << "Failed to load bunny model.\n";
+        //}
 
-        bunnyModel = std::make_unique<PointCloud>(tgai, bunnyVertices);
+        //bunnyModel = std::make_unique<PointCloud>(tgai, bunnyVertices);
 
         // Load shaders
-        vertShader = tga::loadShader("shaders/bunny_primitive_vert.spv", tga::ShaderType::vertex, tgai);
-        fragShader = tga::loadShader("shaders/bunny_primitive_frag.spv", tga::ShaderType::fragment, tgai);
+        // vertShader = tga::loadShader("shaders/bunny_primitive_vert.spv", tga::ShaderType::vertex, tgai);
+        // fragShader = tga::loadShader("shaders/bunny_primitive_frag.spv", tga::ShaderType::fragment, tgai);
         // vertShader = tga::loadShader("shaders/cube_vert.spv", tga::ShaderType::vertex, tgai);
         // fragShader = tga::loadShader("shaders/cube_frag.spv", tga::ShaderType::fragment, tgai);
+        vertShader = tga::loadShader("shaders/skybox_vert.spv", tga::ShaderType::vertex, tgai);
+        fragShader = tga::loadShader("shaders/skybox_frag.spv", tga::ShaderType::fragment, tgai);
 
         glm::vec3 eye = {0.6f, 0.6f, 0.6f};
         glm::vec3 center = {0.5f, 0.5f, 0.5f};
@@ -73,7 +81,8 @@ struct Application {
         tga::InputLayout inputLayout{
             {
                 tga::BindingLayout{tga::BindingType::uniformBuffer},
-                tga::BindingLayout{tga::BindingType::storageBuffer},
+                // tga::BindingLayout{tga::BindingType::storageBuffer},
+                tga::BindingLayout{tga::BindingType::sampler},
             }
         };
 
@@ -92,8 +101,9 @@ struct Application {
         tga::InputSetInfo inputSetInfo{
             renderPass,
             { tga::Binding{uniformBuffer, 0, 0},
-                        tga::Binding{bunnyModel->getBuffer(), 1, 0}
-                        },
+                        // tga::Binding{bunnyModel->getBuffer(), 1, 0},
+                        tga::Binding{scene.get()->getSkyCubemap(), 1, 0}
+            },
             0
         };
 

@@ -12,15 +12,17 @@ void Application::run() {
 
         recorder.inlineBufferUpdate(uniformBuffer, &cameraData, sizeof(CameraData))
                 .setRenderPass(renderPass, currentFrame, {0.05f, 0.05f, 0.05f, 1.0f}, 1.0f)
-                .bindInputSet(inputSet);
-                // .draw(36, 0, 1, 0);
+                .bindInputSet(inputSet)
+                .draw(36, 0, 1, 0);
 
-        bunnyModel->draw(recorder);
+        // bunnyModel->draw(recorder);
 
         commandBuffer = recorder.endRecording();
 
         tgai.execute(commandBuffer);
         tgai.present(window, currentFrame);
+
+
     }
 
     tgai.waitForCompletion(commandBuffer);
