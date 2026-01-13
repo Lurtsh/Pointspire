@@ -7,15 +7,15 @@
 
 struct Camera {
     // State
-    glm::vec3 pos{2.5f, 2.5f, 2.5f};
-    glm::vec3 front;
+    glm::vec3 pos{0.0f, 0.0f, 1.0f};//{631680, 5.26862e+06, 950.0f};
+    glm::vec3 front{0.0f, 0.0f, 1.0f};
     glm::vec3 right;
     glm::vec3 up;
     glm::vec3 worldUp{0.0f, 1.0f, 0.0f};
 
     // Euler Angles
     float yaw = -135.0f;
-    float pitch = -35.0f;
+    float pitch = 0.0f;
     float fov = 60.0f;
 
     // Configuration

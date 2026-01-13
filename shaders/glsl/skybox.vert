@@ -9,8 +9,8 @@ layout(set = 0, binding = 0) uniform Camera {
 layout(location = 0) out vec3 texCoords;
 
 const vec3 skyboxVertices[8] = vec3[8](
-    vec3(-10, -10, -10), vec3(-10, -10, 10), vec3(-10, 10, -10), vec3(-10, 10, 10),
-    vec3(10, -10, -10), vec3(10, -10, 10), vec3(10, 10, -10), vec3(10, 10, 10)
+    vec3(-1, -1, -1), vec3(-1, -1, 1), vec3(-1, 1, -1), vec3(-1, 1, 1),
+    vec3(1, -1, -1), vec3(1, -1, 1), vec3(1, 1, -1), vec3(1, 1, 1)
 );
 
 const int skyboxFaces[36] = int[36](
@@ -28,5 +28,7 @@ void main() {
 
     mat4 viewNoTranslation = mat4(mat3(ubo.view));
 //    gl_Position = ubo.proj * ubo.view * ubo.model * vec4(pos, 1.0);
-    gl_Position = ubo.proj * viewNoTranslation * vec4(pos, 1.0);
+//    gl_Position = ubo.proj * viewNoTranslation * vec4(pos, 1.0);
+    vec4 pos1 = ubo.proj * viewNoTranslation * vec4(pos, 1.0);
+    gl_Position = pos1.xyww;
 }

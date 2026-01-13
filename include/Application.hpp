@@ -27,6 +27,8 @@ struct Application {
 
     std::unique_ptr<Scene> scene;
 
+    PointCloud pointCloud = PointCloud{tgai};
+
     Camera camera;
 
     struct CameraData {
@@ -37,8 +39,11 @@ struct Application {
 
     Application() {
         auto [scrW, scrH] = tgai.screenResolution();
-        auto winW = scrW / 2;
-        auto winH = scrH / 2;
+        // auto winW = scrW / 2;
+        // auto winH = scrH / 2;
+
+        auto winW = 1920;
+        auto winH = 1080;
 
         scene = std::make_unique<Scene>(tgai);
 
@@ -55,16 +60,18 @@ struct Application {
 
         //bunnyModel = std::make_unique<PointCloud>(tgai, bunnyVertices);
 
+        // pointCloud = PointCloud{tgai};
+
         // Load shaders
-        // vertShader = tga::loadShader("shaders/bunny_primitive_vert.spv", tga::ShaderType::vertex, tgai);
-        // fragShader = tga::loadShader("shaders/bunny_primitive_frag.spv", tga::ShaderType::fragment, tgai);
+        vertShader = tga::loadShader("shaders/bunny_primitive_vert.spv", tga::ShaderType::vertex, tgai);
+        fragShader = tga::loadShader("shaders/bunny_primitive_frag.spv", tga::ShaderType::fragment, tgai);
         // vertShader = tga::loadShader("shaders/cube_vert.spv", tga::ShaderType::vertex, tgai);
         // fragShader = tga::loadShader("shaders/cube_frag.spv", tga::ShaderType::fragment, tgai);
-        vertShader = tga::loadShader("shaders/skybox_vert.spv", tga::ShaderType::vertex, tgai);
-        fragShader = tga::loadShader("shaders/skybox_frag.spv", tga::ShaderType::fragment, tgai);
+        // vertShader = tga::loadShader("shaders/skybox_vert.spv", tga::ShaderType::vertex, tgai);
+        // fragShader = tga::loadShader("shaders/skybox_frag.spv", tga::ShaderType::fragment, tgai);
 
-        glm::vec3 eye = {0.6f, 0.6f, 0.6f};
-        glm::vec3 center = {0.5f, 0.5f, 0.5f};
+        glm::vec3 eye = {-100.0f, 100.0f, -100.0f};
+        glm::vec3 center = {100.0f, 0.0f, 100.0f};
         glm::vec3 up = {0.0f, 1.0f, 0.0f};
 
         cameraData.model = glm::mat4(1.0f);
@@ -72,7 +79,7 @@ struct Application {
 
         auto aspect = static_cast<float>(scrW) / static_cast<float>(scrH);
 
-        cameraData.proj = glm::perspective_vk(glm::radians(60.0f), aspect, 0.1f, 100.0f);
+        cameraData.proj = glm::perspective_vk(glm::radians(60.0f), aspect, 0.1f, 5000.0f);
 
         tga::BufferInfo uboInfo{
             tga::BufferUsage::uniform,
@@ -83,8 +90,8 @@ struct Application {
         tga::InputLayout inputLayout{
             {
                 tga::BindingLayout{tga::BindingType::uniformBuffer},
-                // tga::BindingLayout{tga::BindingType::storageBuffer},
-                tga::BindingLayout{tga::BindingType::sampler},
+                tga::BindingLayout{tga::BindingType::storageBuffer},
+                // tga::BindingLayout{tga::BindingType::sampler},
             }
         };
 
@@ -95,7 +102,7 @@ struct Application {
             {},
             inputLayout,
             tga::ClearOperation::all,
-            tga::PerPixelOperations{tga::CompareOperation::less, true},
+            tga::PerPixelOperations{tga::CompareOperation::lessEqual, true},
             tga::RasterizerConfig{tga::FrontFace::counterclockwise, tga::CullMode::none}
         };
         renderPass = tgai.createRenderPass(passInfo);
@@ -103,8 +110,8 @@ struct Application {
         tga::InputSetInfo inputSetInfo{
             renderPass,
             { tga::Binding{uniformBuffer, 0, 0},
-                        // tga::Binding{bunnyModel->getBuffer(), 1, 0},
-                        tga::Binding{scene.get()->getSkyCubemap(), 1, 0}
+                        tga::Binding{pointCloud.getBuffer(), 1, 0},
+                        // tga::Binding{scene.get()->getSkyCubemap(), 1, 0}
             },
             0
         };

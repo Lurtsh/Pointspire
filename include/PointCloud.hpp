@@ -6,9 +6,15 @@
 #include "BunnyLoader.hpp"
 #include <span>
 
+struct Point {
+    alignas(16) glm::vec3 position;
+    //alignas(16) glm::vec3 color;
+    //float intensity;
+};
+
 class PointCloud {
 public:
-    PointCloud(tga::Interface& tgai, const std::vector<PositionVertex>& vertices);
+    PointCloud(tga::Interface& tgai);
 
     PointCloud(const PointCloud&) = delete;
     PointCloud& operator=(const PointCloud&) = delete;
@@ -22,10 +28,13 @@ public:
 
     tga::Buffer getBuffer() const {return m_buffer;}
 
+    void loadLAS(std::string filepath);
+
 private:
     std::reference_wrapper<tga::Interface> m_tgai;
     tga::Buffer m_buffer;
     uint32_t m_vertexCount;
+    std::vector<Point> m_vertices;
 };
 
 
