@@ -70,8 +70,8 @@ struct Application {
         // vertShader = tga::loadShader("shaders/skybox_vert.spv", tga::ShaderType::vertex, tgai);
         // fragShader = tga::loadShader("shaders/skybox_frag.spv", tga::ShaderType::fragment, tgai);
 
-        glm::vec3 eye = {-100.0f, 100.0f, -100.0f};
-        glm::vec3 center = {100.0f, 0.0f, 100.0f};
+        glm::vec3 eye = {100.0f, 100.0f, 100.0f};
+        glm::vec3 center = {0.0f, 0.0f, 0.0f};
         glm::vec3 up = {0.0f, 1.0f, 0.0f};
 
         cameraData.model = glm::mat4(1.0f);

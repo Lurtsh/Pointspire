@@ -8,8 +8,8 @@
 
 struct Point {
     alignas(16) glm::vec3 position;
-    //alignas(16) glm::vec3 color;
-    //float intensity;
+    alignas(16) glm::vec3 color;
+    float intensity;
 };
 
 class PointCloud {
@@ -26,15 +26,20 @@ public:
 
     void draw(tga::CommandRecorder& recorder) const;
 
-    tga::Buffer getBuffer() const {return m_buffer;}
+    tga::Buffer getBuffer() const {return m_pointBuffer;}
+    tga::Buffer getIndirectBuffer() const {return m_indirectBuffer;}
 
-    void loadLAS(std::string filepath);
+    float getMaxHeight() const { return m_maxHeight; }
+
+    void loadLAS(const std::string& filepath);
 
 private:
     std::reference_wrapper<tga::Interface> m_tgai;
-    tga::Buffer m_buffer;
+    tga::Buffer m_pointBuffer;
+    tga::Buffer m_indirectBuffer;
     uint32_t m_vertexCount;
-    std::vector<Point> m_vertices;
+    std::vector<Point> m_points;
+    float m_maxHeight = 0.0f;
 };
 
 

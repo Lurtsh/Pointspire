@@ -92,7 +92,7 @@ set(HEADERS Application.hpp
             PointCloud.hpp
             Camera.hpp
             Scene.hpp
-            Overlay.hpp
+            #Overlay.hpp
 )
 
 set(SOURCES Application.cpp
@@ -100,7 +100,7 @@ set(SOURCES Application.cpp
             PointCloud.cpp
             Camera.cpp
             Scene.cpp
-            Overlay.cpp
+            #Overlay.cpp
 )
 
 list(TRANSFORM HEADERS PREPEND "include/")

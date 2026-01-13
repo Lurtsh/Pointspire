@@ -2,7 +2,7 @@
 #include "BunnyLoader.hpp"
 
 #include <chrono>
-#include "Overlay.hpp"
+//#include "Overlay.hpp"
 
 void Application::run() {
     while (!tgai.windowShouldClose(window)) {

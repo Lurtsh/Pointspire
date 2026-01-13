@@ -13,7 +13,6 @@ Scene::Scene(tga::Interface &tgai) : tgai(tgai) {
     loadSkyCubemap(faces);
 }
 
-
 void Scene::loadSkyCubemap(const std::string filepath) {
     // skyCubemap = tga::loadTexture(filepath, tga::Format::r8g8b8a8_unorm, tga::SamplerMode::linear, tga::AddressMode::clampEdge, tgai);
     // stbi_load()
