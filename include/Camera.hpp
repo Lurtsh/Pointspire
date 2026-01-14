@@ -19,7 +19,7 @@ struct Camera {
     float fov = 60.0f;
 
     // Configuration
-    const float moveSpeed = 2.5f;
+    const float moveSpeed = 25.0f;
     const float rotateSpeed = 90.0f; // Degrees per second
     const float zoomSpeed = 50.0f;
 
