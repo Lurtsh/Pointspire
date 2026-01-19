@@ -3,139 +3,91 @@
 #define POINTSPIRE_APPLICATION_HPP
 
 #include "tga/tga.hpp"
-#include "tga/tga_math.hpp"
-
-#include <vector>
-
-#include "tga/tga_utils.hpp"
+#include <memory>
+#include <utility> // For std::pair
 
 #include "PointCloud.hpp"
 #include "Camera.hpp"
 #include "Scene.hpp"
 
+/**
+ * @brief The main application class orchestrating the rendering engine.
+ *
+ * This class manages the application lifecycle, including window creation,
+ * resource initialization (shaders, buffers, render passes), and the main
+ * execution loop. It coordinates the interaction between the Camera,
+ * Skybox (Scene), and the Point Cloud data.
+ */
 struct Application {
-    tga::Interface tgai;
-    tga::Window window;
-    tga::Shader vertShader;
-    tga::Shader fragShader;
-    tga::Buffer uniformBuffer;
-    tga::InputSet inputSet;
-    tga::RenderPass renderPass;
-    tga::CommandBuffer commandBuffer;
+    /// @name Core Resources
+    /// @{
+    tga::Interface& tgai;           ///< Reference to the TGA Vulkan wrapper interface.
+    tga::Window window;             ///< The OS window handle.
+    tga::CommandBuffer commandBuffer; ///< Recyclable command buffer for frame commands.
+    /// @}
 
-    //std::unique_ptr<PointCloud> bunnyModel;
+    /// @name Point Cloud Render Pipeline
+    /// @{
+    tga::Shader pcVertShader;       ///< Vertex shader for point sprites (quads).
+    tga::Shader pcFragShader;       ///< Fragment shader for point coloring.
+    tga::RenderPass pcRenderPass;   ///< Pass config: Loads previous buffer, Writes Depth.
+    tga::InputSet pcInputSet;       ///< Bindings: Camera UBO, Visible Point Storage Buffer.
+    /// @}
 
-    std::unique_ptr<Scene> scene;
+    /// @name Skybox Render Pipeline
+    /// @{
+    tga::Shader skyVertShader;      ///< Vertex shader for the skybox cube.
+    tga::Shader skyFragShader;      ///< Fragment shader for cubemap sampling.
+    tga::RenderPass skyRenderPass;  ///< Pass config: Clears screen, Read-Only Depth.
+    tga::InputSet skyInputSet;      ///< Bindings: Camera UBO, Cubemap Texture.
+    /// @}
 
-    PointCloud pointCloud = PointCloud{tgai};
+    /// @name Logical Components
+    /// @{
+    PointCloud pointCloud;          ///< Manages point data, normalization, and buffers.
+    Camera camera;                  ///< Manages view/projection matrices and input.
+    Scene scene;                    ///< Manages background assets (Skybox).
+    /// @}
 
-    Camera camera;
+    /// @name Compute Culling Pipeline
+    /// @{
+    tga::Shader cullingShader;      ///< Compute shader for frustum culling and compaction.
+    tga::Buffer cullingBuffer;      ///< (Unused variable/placeholder).
+    tga::ComputePass cullPass;      ///< Pipeline state for the compute shader.
+    tga::InputSet cullInputSet;     ///< Bindings: Cam, Source, Visible, Indirect, Info.
+    /// @}
 
-    struct CameraData {
-        alignas(16) glm::mat4 model;
-        alignas(16) glm::mat4 view;
-        alignas(16) glm::mat4 proj;
-    };
+    /**
+     * @brief Initializes the application, window, and all GPU resources.
+     *
+     * Sets up the rendering pipelines (Skybox first, PointCloud second) and
+     * the compute pipeline for frustum culling.
+     *
+     * @param _tgai Reference to the initialized TGA interface.
+     */
+    Application(tga::Interface& _tgai);
 
-    Application() {
-        auto [scrW, scrH] = tgai.screenResolution();
-        // auto winW = scrW / 2;
-        // auto winH = scrH / 2;
+    ~Application();
 
-        auto winW = 1920;
-        auto winH = 1080;
-
-        scene = std::make_unique<Scene>(tgai);
-
-        tga::WindowInfo winInfo{winW, winH, tga::PresentMode::vsync};
-        window = tgai.createWindow(winInfo);
-        tgai.setWindowTitle(window, "Pointspire");
-
-        // Load the bunny model
-        //std::vector<PositionVertex> bunnyVertices = loadBunny("assets/bunny/bun.conf", "assets/bunny/data/");
-
-        //if (bunnyVertices.empty()) {
-        //    std::cerr << "Failed to load bunny model.\n";
-        //}
-
-        //bunnyModel = std::make_unique<PointCloud>(tgai, bunnyVertices);
-
-        // pointCloud = PointCloud{tgai};
-
-        // Load shaders
-        vertShader = tga::loadShader("shaders/bunny_primitive_vert.spv", tga::ShaderType::vertex, tgai);
-        fragShader = tga::loadShader("shaders/bunny_primitive_frag.spv", tga::ShaderType::fragment, tgai);
-        // vertShader = tga::loadShader("shaders/cube_vert.spv", tga::ShaderType::vertex, tgai);
-        // fragShader = tga::loadShader("shaders/cube_frag.spv", tga::ShaderType::fragment, tgai);
-        // vertShader = tga::loadShader("shaders/skybox_vert.spv", tga::ShaderType::vertex, tgai);
-        // fragShader = tga::loadShader("shaders/skybox_frag.spv", tga::ShaderType::fragment, tgai);
-
-        glm::vec3 eye = {100.0f, 100.0f, 100.0f};
-        glm::vec3 center = {0.0f, 0.0f, 0.0f};
-        glm::vec3 up = {0.0f, 1.0f, 0.0f};
-
-        cameraData.model = glm::mat4(1.0f);
-        cameraData.view = glm::lookAt(eye, center, up);
-
-        auto aspect = static_cast<float>(scrW) / static_cast<float>(scrH);
-
-        cameraData.proj = glm::perspective_vk(glm::radians(60.0f), aspect, 0.1f, 5000.0f);
-
-        tga::BufferInfo uboInfo{
-            tga::BufferUsage::uniform,
-            sizeof(CameraData)
-        };
-        uniformBuffer = tgai.createBuffer(uboInfo);
-
-        tga::InputLayout inputLayout{
-            {
-                tga::BindingLayout{tga::BindingType::uniformBuffer},
-                tga::BindingLayout{tga::BindingType::storageBuffer},
-                // tga::BindingLayout{tga::BindingType::sampler},
-            }
-        };
-
-        tga::RenderPassInfo passInfo{
-            vertShader,
-            fragShader,
-            window,
-            {},
-            inputLayout,
-            tga::ClearOperation::all,
-            tga::PerPixelOperations{tga::CompareOperation::lessEqual, true},
-            tga::RasterizerConfig{tga::FrontFace::counterclockwise, tga::CullMode::none}
-        };
-        renderPass = tgai.createRenderPass(passInfo);
-
-        tga::InputSetInfo inputSetInfo{
-            renderPass,
-            { tga::Binding{uniformBuffer, 0, 0},
-                        tga::Binding{pointCloud.getBuffer(), 1, 0},
-                        // tga::Binding{scene.get()->getSkyCubemap(), 1, 0}
-            },
-            0
-        };
-
-        // inputSetInfo.targetPass = renderPass;
-        inputSet = tgai.createInputSet(inputSetInfo);
-
-        commandBuffer = tga::CommandBuffer{};
-    }
-
-    ~Application() {
-        if (commandBuffer) tgai.free(commandBuffer);
-        if (inputSet) tgai.free(inputSet);
-        if (renderPass) tgai.free(renderPass);
-        if (uniformBuffer) tgai.free(uniformBuffer);
-        if (vertShader) tgai.free(vertShader);
-        if (fragShader) tgai.free(fragShader);
-        if (window) tgai.free(window);
-    }
-
+    /**
+     * @brief Runs the main application loop.
+     *
+     * Handles input polling, delta time calculation, camera updates, compute dispatch,
+     * and command buffer recording for every frame until the window is closed.
+     */
     void run();
 
-private:
-    CameraData cameraData;
+    /**
+     * @brief Calculates 2D dispatch dimensions to bypass hardware limits.
+     *
+     * Most GPUs limit the X dimension of a dispatch group to 65535. This helper
+     * converts a large 1D total count into a 2D (X, Y) grid layout.
+     *
+     * @param numThreads The total number of items (points) to process.
+     * @param workGroupSize The local workgroup size defined in the shader (default 256).
+     * @return std::pair<uint32_t, uint32_t> The {GroupCountX, GroupCountY} dimensions.
+     */
+    std::pair<uint32_t, uint32_t> getDispatchDimensions(size_t numThreads, uint32_t workGroupSize = 256);
 };
 
 #endif //POINTSPIRE_APPLICATION_HPP
