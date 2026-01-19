@@ -1,17 +1,15 @@
 #include "tga/tga.hpp"
-#include "tga/tga_math.hpp"
-
 #include <iostream>
-
 #include "Application.hpp"
-
+#include "Camera.hpp"
+#include "Scene.hpp"
 
 int main() {
     try {
-        Application app;
+        tga::Interface tgai;
+        Application app(tgai);
         app.run();
-    }
-    catch (const std::exception& e) {
+    } catch (const std::exception& e) {
         std::cerr << "Fatal Error: " << e.what() << "\n";
         return -1;
     }
