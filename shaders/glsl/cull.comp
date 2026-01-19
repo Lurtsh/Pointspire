@@ -1,0 +1,66 @@
+#version 450
+layout(local_size_x = 256) in;
+
+struct Point {
+    vec3 position;
+    float padding1; // alignas(16)
+    vec3 color;
+    float intensity; // alignas(16) implicitly padded to vec4 size if needed
+};
+
+// Layout must match C++ DrawIndirectCommand
+struct IndirectCommand {
+    uint vertexCount;
+    uint instanceCount;
+    uint firstVertex;
+    uint firstInstance;
+};
+
+layout(set = 0, binding = 0) uniform Camera {
+    mat4 model;
+    mat4 view;
+    mat4 proj;
+} ubo;
+
+layout(std430, set = 0, binding = 1) readonly buffer SourceBuffer {
+    Point points[];
+};
+
+layout(std430, set = 0, binding = 2) writeonly buffer VisibleBuffer {
+    Point points[];
+};
+
+layout(std430, set = 0, binding = 3) buffer IndirectBuffer {
+    IndirectCommand cmd;
+};
+
+// Push constant for total number of points in source
+layout(push_constant) uniform PushConstants {
+    uint totalCount;
+} pc;
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= pc.totalCount) return;
+
+    Point p = points[idx];
+
+    // Frustum Culling in Clip Space
+    // Vulkan Clip Space: x: [-w, w], y: [-w, w], z: [0, w]
+    vec4 clipPos = ubo.proj * ubo.view * vec4(p.position, 1.0);
+
+    bool inside = true;
+
+    // Check Left/Right
+    if (clipPos.x < -clipPos.w || clipPos.x > clipPos.w) inside = false;
+    // Check Bottom/Top
+    if (clipPos.y < -clipPos.w || clipPos.y > clipPos.w) inside = false;
+    // Check Near/Far (Vulkan Z is 0 to w)
+    if (clipPos.z < 0.0 || clipPos.z > clipPos.w) inside = false;
+
+    if (inside) {
+        // Atomic Add returns the original value, which is our index in the Visible Buffer
+        uint outIndex = atomicAdd(cmd.instanceCount, 1);
+        visiblePoints.points[outIndex] = p;
+    }
+}
