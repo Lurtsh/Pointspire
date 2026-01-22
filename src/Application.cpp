@@ -1,6 +1,7 @@
 #include "Application.hpp"
 #include <chrono>
 #include <iostream>
+#include <numeric>>
 
 Application::Application(tga::Interface& _tgai)
     : tgai(_tgai), pointCloud(tgai), camera(tgai), scene(tgai)
@@ -105,6 +106,10 @@ Application::Application(tga::Interface& _tgai)
     };
 
     cullInputSet = tgai.createInputSet(setInfo);
+
+    // Create and build the Layered Point Cloud
+    createLPCPipelines();
+    buildLPC();
 }
 
 Application::~Application() {
@@ -211,4 +216,232 @@ std::pair<uint32_t, uint32_t> Application::getDispatchDimensions(size_t numThrea
     auto groupCountY = static_cast<uint32_t>((totalGroups + MAX_DIM_X - 1) / MAX_DIM_X);
 
     return {groupCountX, groupCountY};
+}
+
+
+
+
+void Application::createLPCPipelines() {
+    // 1. Morton
+    // tga::Shader s_morton = loadCompShader("shaders/octree/1_morton.spv");
+    tga::Shader mortonComputeShader = tga::loadShader("shaders/1_morton_comp.spv", tga::ShaderType::compute, tgai);
+    tga::InputLayout l_morton{{
+        {tga::BindingType::uniformBuffer}, {tga::BindingType::storageBuffer},
+        {tga::BindingType::storageBuffer}, {tga::BindingType::storageBuffer}
+    }};
+    m_lpcPasses.mortonPass = tgai.createComputePass({mortonComputeShader, l_morton});
+    m_lpcInputSets.mortonSet = tgai.createInputSet({m_lpcPasses.mortonPass, {
+        {pointCloud.getLPCUniformsBuffer(), 0}, {pointCloud.getSourceBuffer(), 1},
+        {pointCloud.getMortonCodesBuffer(), 2}, {pointCloud.getSortIndicesBuffer(), 3}
+    }});
+
+    // 2. Bitonic
+    tga::Shader bitonicSortComputeShader = tga::loadShader("shaders/2_bitonic_sort_comp.spv", tga::ShaderType::compute, tgai);
+    tga::InputLayout l_bitonic{{
+        {tga::BindingType::uniformBuffer}, {tga::BindingType::storageBuffer}, {tga::BindingType::storageBuffer}, {tga::BindingType::uniformBuffer}
+    }};
+    m_lpcPasses.bitonicSortPass = tgai.createComputePass({bitonicSortComputeShader, l_bitonic});
+    m_lpcInputSets.bitonicSortSet = tgai.createInputSet({m_lpcPasses.bitonicSortPass, {
+        {pointCloud.getLPCUniformsBuffer(), 0}, {pointCloud.getMortonCodesBuffer(), 1},
+        {pointCloud.getSortIndicesBuffer(), 2}, {pointCloud.getBitonicParamsBuffer(), 3}
+    }});
+
+    // 3. Reorder
+    tga::Shader reorderComputeShader = tga::loadShader("shaders/3_reorder_comp.spv", tga::ShaderType::compute, tgai);
+    tga::InputLayout l_reorder{{
+        {tga::BindingType::uniformBuffer}, {tga::BindingType::storageBuffer},
+        {tga::BindingType::storageBuffer}, {tga::BindingType::storageBuffer}
+    }};
+    m_lpcPasses.reorderPass = tgai.createComputePass({reorderComputeShader, l_reorder});
+    m_lpcInputSets.reorderSet = tgai.createInputSet({m_lpcPasses.reorderPass, {
+        {pointCloud.getLPCUniformsBuffer(), 0}, {pointCloud.getSourceBuffer(), 1},
+        {pointCloud.getSortIndicesBuffer(), 2}, {pointCloud.getVisibleBuffer(), 3} // Using Visible as temp dst
+    }});
+
+    // 4. Mark Heads
+    tga::Shader markHeadsComputeShader = tga::loadShader("shaders/4_mark_heads_comp.spv", tga::ShaderType::compute, tgai);
+    tga::InputLayout l_mark{{
+        {tga::BindingType::uniformBuffer}, {tga::BindingType::storageBuffer}, {tga::BindingType::storageBuffer}
+    }};
+    m_lpcPasses.markHeadsPass = tgai.createComputePass({markHeadsComputeShader, l_mark});
+    m_lpcInputSets.markHeadsSet = tgai.createInputSet({m_lpcPasses.markHeadsPass, {
+        {pointCloud.getLPCUniformsBuffer(), 0}, {pointCloud.getMortonCodesBuffer(), 1},
+        {pointCloud.getHeadFlagsBuffer(), 2}
+    }});
+
+    // 5. Scatter
+    tga::Shader scatterComputeShader = tga::loadShader("shaders/5_scatter_comp.spv", tga::ShaderType::compute, tgai);
+    tga::InputLayout l_scatter{
+        {
+            {tga::BindingType::uniformBuffer}, {tga::BindingType::storageBuffer}, {tga::BindingType::storageBuffer},
+            {tga::BindingType::storageBuffer}, {tga::BindingType::storageBuffer}, {tga::BindingType::storageBuffer}
+        }};
+    m_lpcPasses.scatterPass = tgai.createComputePass({scatterComputeShader, l_scatter});
+    m_lpcInputSets.scatterSet = tgai.createInputSet({m_lpcPasses.scatterPass, {
+    {pointCloud.getLPCUniformsBuffer(), 0}, {pointCloud.getMortonCodesBuffer(), 1},
+    {pointCloud.getHeadFlagsBuffer(), 2}, {pointCloud.getScannedIndicesBuffer(), 3},
+    {pointCloud.getUniqueCodesBuffer(), 4}, {pointCloud.getVoxelStartsBuffer(), 5}}
+    });
+
+    // 6. Init Leaves
+    tga::Shader initLeavesComputeShader = tga::loadShader("shaders/6_init_leaves_comp.spv", tga::ShaderType::compute, tgai);
+    tga::InputLayout l_initLeaves{
+        {
+            {tga::BindingType::uniformBuffer}, {tga::BindingType::storageBuffer},
+            {tga::BindingType::storageBuffer}, {tga::BindingType::storageBuffer}
+        }};
+    m_lpcPasses.initLeavesPass = tgai.createComputePass({initLeavesComputeShader, l_initLeaves});
+    m_lpcInputSets.initLeavesSet = tgai.createInputSet({m_lpcPasses.initLeavesPass, {
+    {pointCloud.getLPCUniformsBuffer(), 0}, {pointCloud.getUniqueCodesBuffer(), 1},
+        {pointCloud.getVoxelStartsBuffer(), 2}, {pointCloud.getNodesBuffer(), 3}
+    }});
+
+    tga::Shader buildInternalComputeShader = tga::loadShader("shaders/7_build_internal_comp.spv", tga::ShaderType::compute, tgai);
+    tga::InputLayout l_buildInternal{
+        {
+            {tga::BindingType::uniformBuffer}, {tga::BindingType::storageBuffer}, {tga::BindingType::storageBuffer},
+        }};
+    m_lpcPasses.buildInternalPass = tgai.createComputePass({buildInternalComputeShader, l_buildInternal});
+    m_lpcInputSets.buildInternalSet = tgai.createInputSet({m_lpcPasses.buildInternalPass, {
+    {pointCloud.getLPCUniformsBuffer(), 0}, {pointCloud.getUniqueCodesBuffer(), 1}, {pointCloud.getNodesBuffer(), 2}
+    }});
+}
+
+
+void Application::buildLPC() {
+    std::cout << "--- Building Layered Point Cloud ---" << std::endl;
+    uint32_t numPoints = pointCloud.getTotalPointCount();
+    auto dims = getDispatchDimensions(numPoints);
+
+    // Temp Cmd Buffer for Phase 1
+    tga::CommandBuffer cmd{};
+    {
+
+
+        tga::CommandRecorder rec(tgai, cmd);
+
+        // 1. Morton
+        std::cout << "- Computing Morton codes " << std::endl;
+        rec.setComputePass(m_lpcPasses.mortonPass).bindInputSet(m_lpcInputSets.mortonSet);
+        rec.dispatch(dims.first, dims.second, 1);
+        rec.barrier(tga::PipelineStage::ComputeShader, tga::PipelineStage::VertexShader);
+
+        // 2. Bitonic Sort
+        std::cout << "- Sorting Morton codes" << std::endl;
+        uint32_t pot = 1;
+        while(pot < numPoints) pot <<= 1;
+
+        struct SortParams { uint32_t j, k; };
+
+        for (uint32_t k = 2; k <= pot; k <<= 1) {
+            for (uint32_t j = k >> 1; j > 0; j >>= 1) {
+                SortParams p{j, k};
+
+                // A. Update the UBO with current stage parameters
+                rec.inlineBufferUpdate(pointCloud.getBitonicParamsBuffer(), &p, sizeof(p));
+
+                // B. Barrier: Ensure Transfer (Update) completes before Compute reads UBO
+                rec.barrier(tga::PipelineStage::Transfer, tga::PipelineStage::ComputeShader);
+
+                // C. Dispatch Sort Step
+                rec.setComputePass(m_lpcPasses.bitonicSortPass).bindInputSet(m_lpcInputSets.bitonicSortSet);
+                rec.dispatch(dims.first, dims.second, 1);
+
+                // D. Barrier:
+                // 1. Compute -> Compute: Ensure sorting of this step finishes before next step reads data
+                // 2. Compute -> Transfer: Ensure shader is done reading 'j,k' before we overwrite them in next loop
+                rec.barrier(tga::PipelineStage::ComputeShader,
+                            tga::PipelineStage::ComputeShader);
+            }
+        }
+
+        // 3. Reorder
+        std::cout << "- Reordering Morton codes" << std::endl;
+        rec.setComputePass(m_lpcPasses.reorderPass).bindInputSet(m_lpcInputSets.reorderSet);
+        rec.dispatch(dims.first, dims.second, 1);
+        rec.barrier(tga::PipelineStage::ComputeShader, tga::PipelineStage::ComputeShader);
+
+        // 4. Mark Heads
+        std::cout << "- Marking Heads" << std::endl;
+        rec.setComputePass(m_lpcPasses.markHeadsPass).bindInputSet(m_lpcInputSets.markHeadsSet);
+        rec.dispatch(dims.first, dims.second, 1);
+        rec.barrier(tga::PipelineStage::ComputeShader, tga::PipelineStage::Transfer); // Ready for download
+
+        cmd = rec.endRecording();
+        tgai.execute(cmd);
+        tgai.waitForCompletion(cmd);
+        // tgai.free(cmd);
+    }
+
+    std::cout << "Tracing: Stage 1 is complete" << std::endl;
+    // --- PHASE 2: CPU SCAN ---
+    // Download Flags
+    std::vector<uint32_t> flags(numPoints);
+    tga::StagingBuffer stageFlags = tgai.createStagingBuffer({numPoints * sizeof(uint32_t)});
+
+    std::cout << "Tracing: Created host-side staging buffer" << std::endl;
+    // Command to download
+    {
+    // tga::CommandBuffer cmd2{};
+
+        tga::CommandRecorder rec(tgai);
+        rec.bufferDownload(pointCloud.getHeadFlagsBuffer(), stageFlags, numPoints * sizeof(uint32_t));
+        // tgai.endCommandBuffer(cmd);
+        rec.endRecording();
+
+        tgai.execute(cmd);
+        tgai.waitForCompletion(cmd);
+        // tgai.free(cmd);
+        std::cout << "Tracing: waiting for buffer download! " << std::endl;
+    }
+
+    // Map and Read
+    uint8_t* ptr = static_cast<uint8_t*>(tgai.getMapping(stageFlags));
+    std::memcpy(flags.data(), ptr, flags.size() * sizeof(uint32_t));
+
+    // Exclusive Scan
+    std::vector<uint32_t> scanned(numPoints);
+    std::exclusive_scan(flags.begin(), flags.end(), scanned.begin(), 0);
+    uint32_t numUnique = scanned.back() + flags.back();
+
+    // Update Uniforms with NumUnique
+    LPCUniforms u = {pointCloud.getBounds(), numPoints, numUnique};
+
+    // Upload Scanned + Uniforms
+    tga::StagingBuffer stageScan = tgai.createStagingBuffer({numPoints * sizeof(uint32_t), reinterpret_cast<uint8_t*>(scanned.data())});
+    tga::StagingBuffer stageUniform = tgai.createStagingBuffer({sizeof(u), reinterpret_cast<uint8_t*>(&u)});
+
+    std::cout << "Tracing: Stage 2 (CPU) is complete" << std::endl;
+    // --- PHASE 3: GPU AGAIN ---
+
+    // cmd = tga::CommandBuffer{};
+    {
+        tga::CommandRecorder rec(tgai);
+        rec.bufferUpload(stageScan, pointCloud.getScannedIndicesBuffer(), numPoints * sizeof(uint32_t));
+        rec.bufferUpload(stageUniform, pointCloud.getLPCUniformsBuffer(), sizeof(u));
+        rec.barrier(tga::PipelineStage::Transfer, tga::PipelineStage::ComputeShader);
+
+        // 5. Scatter
+        rec.setComputePass(m_lpcPasses.scatterPass).bindInputSet(m_lpcInputSets.scatterSet);
+        rec.dispatch(dims.first, dims.second, 1);
+        rec.barrier(tga::PipelineStage::ComputeShader, tga::PipelineStage::ComputeShader);
+
+        // 6. Init Leaves
+        rec.setComputePass(m_lpcPasses.initLeavesPass).bindInputSet(m_lpcInputSets.initLeavesSet);
+        rec.dispatch(dims.first, dims.second, 1);
+        rec.barrier(tga::PipelineStage::ComputeShader, tga::PipelineStage::ComputeShader);
+
+        // 7. Build Internal
+        rec.setComputePass(m_lpcPasses.buildInternalPass).bindInputSet(m_lpcInputSets.buildInternalSet);
+        rec.dispatch(dims.first, dims.second, 1);
+        rec.barrier(tga::PipelineStage::ComputeShader, tga::PipelineStage::VertexShader);
+
+        rec.endRecording();
+        tgai.execute(cmd);
+        tgai.waitForCompletion(cmd);
+        tgai.free(cmd);
+    }
+
+     std::cout << "FINISHED!" << std::endl;
+
 }

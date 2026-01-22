@@ -88,6 +88,29 @@ struct Application {
      * @return std::pair<uint32_t, uint32_t> The {GroupCountX, GroupCountY} dimensions.
      */
     std::pair<uint32_t, uint32_t> getDispatchDimensions(size_t numThreads, uint32_t workGroupSize = 256);
+
+    struct LayeredPointCloudPasses {
+        tga::ComputePass mortonPass;
+        tga::ComputePass bitonicSortPass;
+        tga::ComputePass reorderPass;
+        tga::ComputePass markHeadsPass;
+        tga::ComputePass scatterPass;
+        tga::ComputePass initLeavesPass;
+        tga::ComputePass buildInternalPass;
+    } m_lpcPasses;
+
+    struct LayeredPointCloudSets {
+        tga::InputSet mortonSet;
+        tga::InputSet bitonicSortSet;
+        tga::InputSet reorderSet;
+        tga::InputSet markHeadsSet;
+        tga::InputSet scatterSet;
+        tga::InputSet initLeavesSet;
+        tga::InputSet buildInternalSet;
+    } m_lpcInputSets;
+
+    void createLPCPipelines();
+    void buildLPC();
 };
 
 #endif //POINTSPIRE_APPLICATION_HPP

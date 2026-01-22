@@ -5,8 +5,8 @@ layout(set = 0, binding = 0) uniform SceneData {
     mat4 model;
     mat4 view;
     mat4 proj;
-    float maxHeight; 
-    int colorMode; 
+    float maxHeight;
+    int colorMode;
 } ubo;
 
 // Binding 1: Point Cloud Data (SSBO)
@@ -31,20 +31,20 @@ const vec2 offsets[6] = vec2[](
 void main() {
     Point pt = pointData.points[gl_InstanceIndex];
     vec3 centerPos = pt.position;
-    
+
     // --- Render with True Colors ---
     // Using the RGB color loaded from the LAS file
-    fragColor = pt.color; 
-    
+    fragColor = pt.color;
+
     // Optional: If you want to switch back to Intensity:
     // fragColor = vec3(pt.intensity);
 
     // Quad Generation
-    float pointSize = 0.02;
+    float pointSize = 0.025;
     vec2 offset = offsets[gl_VertexIndex] * pointSize;
 
     vec4 viewPos = ubo.view * ubo.model * vec4(centerPos, 1.0);
     viewPos.xy += offset;
-    
+
     gl_Position = ubo.proj * viewPos;
 }

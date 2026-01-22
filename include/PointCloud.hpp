@@ -20,6 +20,37 @@ struct Point {
 };
 
 /**
+ * @brief Axis-Aligned Bounding Box (AABB) defining the spatial extents of the cloud.
+ */
+struct AABB {
+    alignas(16) glm::vec3 min;
+    alignas(16) glm::vec3 max;
+};
+
+/**
+ * TODO write docs
+ */
+struct LPCUniforms {
+    AABB bounds;
+    uint32_t numPoints;
+    uint32_t numUnique;
+};
+
+/**
+ * TODO write docs
+ */
+struct Node {
+    uint32_t parent;
+    uint32_t left;
+    uint32_t right;
+    uint32_t isLeaf;
+    uint32_t mortonCode;
+    uint32_t prefixLen;
+    uint32_t pointStart;
+    uint32_t pointCount;
+};
+
+/**
  * @brief Manages the loading, processing, and GPU resource allocation for a point cloud.
  *
  * This class handles loading LAS/LAZ files via PDAL, normalizing coordinates,
@@ -78,17 +109,89 @@ public:
      */
     uint32_t getTotalPointCount() const { return static_cast<uint32_t>(m_points.size()); }
 
+    /**
+     * @brief Gets the Axis-Aligned Bounding Box of the normalized point cloud.
+     * @return A struct containing the min and max coordinates.
+     */
+    const AABB& getBounds() const { return m_bounds; }
+
+    /**
+     * TODO write docs
+     * @return
+     */
+    const tga::Buffer& getMortonCodesBuffer() const { return m_mortonCodesBuffer; }
+
+    /**
+     * TODO write docs
+     * @return
+     */
+    const tga::Buffer& getSortIndicesBuffer() const { return m_sortIndicesBuffer; }
+
+    /**
+     * TODO write docs
+     * @return
+     */
+    const tga::Buffer& getLPCUniformsBuffer() const { return m_lpcUniformsBuffer; }
+
+    /**
+     * TODO write docs
+     * @return
+     */
+    const tga::Buffer& getBitonicParamsBuffer() const { return m_bitonicParamsBuffer; }
+
+    /**
+     * TODO write docs
+     * @return
+     */
+    const tga::Buffer& getHeadFlagsBuffer() const { return m_headFlagsBuffer; }
+
+    /**
+     * TODO write docs
+     * @return
+     */
+    const tga::Buffer& getScannedIndicesBuffer() const { return m_scannedIndicesBuffer; }
+
+    /**
+     * TODO write docs
+     * @return
+     */
+    const tga::Buffer& getUniqueCodesBuffer() const { return m_uniqueCodesBuffer; }
+
+    /**
+     * TODO write docs
+     * @return
+     */
+    const tga::Buffer& getVoxelStartsBuffer() const { return m_voxelStartsBuffer; }
+
+    /**
+     * TODO write docs
+     * @return
+     */
+    const tga::Buffer& getNodesBuffer() const { return m_nodesBuffer; }
+
+
 private:
     tga::Interface& m_tgai;
 
     // Data
     std::vector<Point> m_points;
+    AABB m_bounds;
 
     // Buffers
     tga::Buffer m_pointBuffer;
     tga::Buffer m_visiblePointBuffer;
     tga::Buffer m_indirectDrawBuffer;
     tga::Buffer m_pointCountBuffer;
+    tga::Buffer m_mortonCodesBuffer;
+    tga::Buffer m_sortIndicesBuffer;
+    tga::Buffer m_lpcUniformsBuffer;
+    tga::Buffer m_bitonicParamsBuffer;
+    tga::Buffer m_headFlagsBuffer;
+    tga::Buffer m_scannedIndicesBuffer;
+    tga::Buffer m_uniqueCodesBuffer;
+    tga::Buffer m_voxelStartsBuffer;
+    tga::Buffer m_nodesBuffer;
+
 };
 
 #endif // POINTSPIRE_POINTCLOUD_HPP

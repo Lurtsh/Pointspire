@@ -1,0 +1,116 @@
+#version 450
+
+layout(local_size_x = 256) in;
+
+struct Point {
+    vec3 position;
+    vec3 color;
+    float intensity;
+};
+
+struct Node {
+    uint parent;
+    uint left;
+    uint right;
+    uint isLeaf;
+    uint mortonCode;
+    uint prefixLen;
+    uint pointStart;
+    uint pointCount;
+};
+
+struct AABB {
+    vec3 min;
+    float padding1; // Standard alignment padding
+    vec3 max;
+    float padding2; // Standard alignment padding
+};
+
+layout(set = 0, binding = 0) uniform UniformData {
+    AABB bounds;
+    uint numPoints;
+    uint numUnique;
+} u_data;
+
+// --- MOVED BUFFERS UP ---
+// They must be declared before they are used in functions like delta()
+layout(std430, set = 0, binding = 1) readonly buffer UniqueCodes { uint sortedCodes[]; };
+layout(std430, set = 0, binding = 2) buffer Nodes { Node nodes[]; };
+
+// --- HELPER FUNCTIONS ---
+
+// Helper: Common Prefix Length (delta)
+int delta(int numCodes, int i, int j) {
+    if (j < 0 || j >= numCodes) return -1;
+
+    uint code1 = sortedCodes[i];
+    uint code2 = sortedCodes[j];
+
+    if (code1 == code2) {
+        // Handle duplicates
+        return 32 + (31 - findMSB(i ^ j));
+    }
+
+    return 31 - findMSB(code1 ^ code2);
+}
+
+void main() {
+    int i = int(gl_GlobalInvocationID.x);
+    int numObjects = int(u_data.numUnique);
+
+    if (i >= numObjects - 1) return;
+
+    // Karras Algorithm Logic
+    int d = (delta(numObjects, i, i + 1) > delta(numObjects, i, i - 1)) ? 1 : -1;
+    int min_delta = delta(numObjects, i, i - d);
+    int l_max = 2;
+    while (delta(numObjects, i, i + l_max * d) > min_delta) l_max *= 2;
+
+    int l = 0;
+    for (int t = l_max / 2; t >= 1; t /= 2) {
+        if (delta(numObjects, i, i + (l + t) * d) > min_delta) l += t;
+    }
+    int j = i + l * d;
+    int node_delta = delta(numObjects, i, j);
+    int s = 0;
+    int t = l;
+    do {
+        t = (t + 1) / 2;
+        if (delta(numObjects, i, i + (s + t) * d) > node_delta) s += t;
+    } while (t > 1);
+
+    int gamma = i + s * d + min(d, 0);
+
+    // Linking
+    int leftIdx = gamma;
+    int rightIdx = gamma + 1;
+    uint myIdx = uint(i);
+
+    nodes[myIdx].isLeaf = 0;
+    nodes[myIdx].mortonCode = sortedCodes[gamma];
+    nodes[myIdx].prefixLen = uint(node_delta);
+    nodes[myIdx].pointStart = 0;
+    nodes[myIdx].pointCount = 0;
+
+    // Handle Left Child
+    if (min(i, j) == leftIdx) {
+        uint leafMap = uint((numObjects - 1) + leftIdx);
+        nodes[myIdx].left = leafMap;
+        nodes[leafMap].parent = myIdx;
+    } else {
+        nodes[myIdx].left = uint(leftIdx);
+        nodes[leftIdx].parent = myIdx;
+    }
+
+    // Handle Right Child
+    if (max(i, j) == rightIdx) {
+        uint leafMap = uint((numObjects - 1) + rightIdx);
+        nodes[myIdx].right = leafMap;
+        nodes[leafMap].parent = myIdx;
+    } else {
+        nodes[myIdx].right = uint(rightIdx);
+        nodes[rightIdx].parent = myIdx;
+    }
+
+    if (i == 0) nodes[myIdx].parent = 0xFFFFFFFF;
+}

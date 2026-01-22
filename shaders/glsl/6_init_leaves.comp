@@ -1,0 +1,78 @@
+#version 450
+
+layout(local_size_x = 256) in;
+
+struct Point {
+    vec3 position;
+    vec3 color;
+    float intensity;
+};
+
+struct Node {
+    uint parent;
+    uint left;
+    uint right;
+    uint isLeaf;
+    uint mortonCode;
+    uint prefixLen;
+    uint pointStart;
+    uint pointCount;
+};
+
+struct AABB {
+    vec3 min;
+    vec3 max;
+};
+
+layout(set = 0, binding = 0) uniform UniformData {
+    AABB bounds;
+    uint numPoints;
+    uint numUnique;
+} u_data;
+
+// Helper Functions
+uint expandBits(uint v) {
+    v = (v * 0x00010001u) & 0xFF0000FFu;
+    v = (v * 0x00000101u) & 0x0F00F00Fu;
+    v = (v * 0x00000011u) & 0xC30C30C3u;
+    v = (v * 0x00000005u) & 0x49249249u;
+    return v;
+}
+
+uint morton3D(vec3 pos, vec3 min_b, vec3 extent) {
+    vec3 norm = (pos - min_b) / extent;
+    float x = clamp(norm.x, 0.0, 1.0);
+    float y = clamp(norm.y, 0.0, 1.0);
+    float z = clamp(norm.z, 0.0, 1.0);
+
+    uint xx = expandBits(uint(x * 1023.0)); // 10 bits per axis
+    uint yy = expandBits(uint(y * 1023.0));
+    uint zz = expandBits(uint(z * 1023.0));
+    return (xx << 2) | (yy << 1) | zz;
+}
+
+layout(std430, set = 0, binding = 1) readonly buffer UniqueCodes { uint unique_codes[]; };
+layout(std430, set = 0, binding = 2) readonly buffer VoxelStarts { uint voxel_starts[]; };
+layout(std430, set = 0, binding = 3) buffer Nodes { Node nodes[]; };
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= u_data.numUnique) return;
+
+    uint leaf_offset = u_data.numUnique - 1;
+    uint node_idx = leaf_offset + idx;
+
+    nodes[node_idx].isLeaf = 1;
+    nodes[node_idx].mortonCode = unique_codes[idx];
+    nodes[node_idx].pointStart = voxel_starts[idx];
+
+    if (idx == u_data.numUnique - 1) {
+        nodes[node_idx].pointCount = u_data.numPoints - voxel_starts[idx];
+    } else {
+        nodes[node_idx].pointCount = voxel_starts[idx + 1] - voxel_starts[idx];
+    }
+
+    nodes[node_idx].left = 0xFFFFFFFF;
+    nodes[node_idx].right = 0xFFFFFFFF;
+    nodes[node_idx].parent = 0xFFFFFFFF; // Init parent to -1
+}
